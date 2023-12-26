@@ -1,0 +1,6 @@
+---
+
+- name: Verify versions
+  ansible.builtin.command:
+    cmd: '{{ role_path }}/files/verify-galaxy-versions'
+  changed_when: false
