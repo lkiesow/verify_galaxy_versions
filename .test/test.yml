@@ -1,0 +1,7 @@
+---
+- name: Test Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: verify_galaxy_versions

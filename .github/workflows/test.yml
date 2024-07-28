@@ -1,0 +1,32 @@
+---
+
+name: Deployment
+
+on:  # yamllint disable-line rule:truthy
+  - push
+  - pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies
+        run: pip3 install ansible
+
+      - name: install ansible-galaxy requirements
+        working-directory: .test
+        run: ansible-galaxy install --force -r requirements.yml
+
+      - name: run test deployment
+        working-directory: .test
+        run: ansible-playbook test.yml
+
+      - name: modify requirements
+        working-directory: .test
+        run: sed -i s/1.0.0/1.1.0/ requirements.yml
+
+      - name: run test deployment (expect failure)
+        working-directory: .test
+        run: '! ansible-playbook test.yml'

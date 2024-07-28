@@ -1,0 +1,4 @@
+---
+roles:
+  - name: lkiesow.verify_galaxy_versions
+    version: 1.0.0
