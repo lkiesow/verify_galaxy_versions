@@ -16,7 +16,7 @@ Example of how to configure and use the role:
 
 ```yaml
 - name: Verify Galaxy Roles
-  hosts: localhost
+  hosts: all
   connection: local
   gather_facts: false
   roles:
