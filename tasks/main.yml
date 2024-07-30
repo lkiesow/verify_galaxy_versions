@@ -5,4 +5,5 @@
     cmd: '{{ role_path }}/files/verify-galaxy-versions'
   delegate_to: localhost
   run_once: true
+  become: false
   changed_when: false
