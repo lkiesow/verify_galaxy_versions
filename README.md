@@ -1,7 +1,7 @@
-Ansible: Verify Galaxy Role
-===========================
+Ansible: Verify Galaxy Versions
+================================
 
-This Ansible role lets you ensure that the correct Galaxy role versions specified in your `requirements.yml` are actually installed, and you are not accidentally deploying with different/unwanted versions of your dependencies. If an installed dependency does not match the required version, the executed play fails.
+This Ansible role lets you ensure that the correct Galaxy role and collection versions specified in your `requirements.yml` are actually installed, and you are not accidentally deploying with different/unwanted versions of your dependencies. If an installed dependency does not match the required version, the executed play fails.
 
 
 
