@@ -1,9 +1,7 @@
 ---
 
 - name: Verify versions
-  ansible.builtin.command:
-    cmd: '{{ role_path }}/files/verify-galaxy-versions'
+  verify_galaxy_versions:
   delegate_to: localhost
   run_once: true
   become: false
-  changed_when: false
