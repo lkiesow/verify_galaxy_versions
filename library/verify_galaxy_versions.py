@@ -6,15 +6,16 @@
 DOCUMENTATION = '''
 ---
 module: verify_galaxy_versions
-short_description: Verify installed Ansible Galaxy role versions
+short_description: Verify installed Ansible Galaxy role and collection versions
 description:
   - Reads C(requirements.yml) from the current working directory and checks
-    that every listed role is installed at the required version.
-  - Fails if a role is missing or installed at a different version.
-  - The roles search path is taken from C(roles_path) in C(ansible.cfg)
-    (searched in the current directory, C(~/.ansible.cfg), and
-    C(/etc/ansible/ansible.cfg) in that order). Falls back to
-    C(~/.ansible/roles) when no config or no C(roles_path) is found.
+    that every listed role and collection is installed at the required version.
+  - Fails if a role or collection is missing or installed at a different version.
+  - The roles search path is taken from C(roles_path) in C(ansible.cfg) and
+    the collections search path from C(collections_path). Both are searched in
+    the current directory, C(~/.ansible.cfg), and C(/etc/ansible/ansible.cfg)
+    in that order, falling back to C(~/.ansible/roles) and
+    C(~/.ansible/collections) respectively when not configured.
 notes:
   - The module is always delegated to localhost and run once, so it is
     independent of the target host inventory.
@@ -38,19 +39,18 @@ import yaml
 from ansible.module_utils.basic import AnsibleModule
 
 
-def get_roles_paths():
-    '''Return the list of Galaxy roles directories to search.
+def _paths_from_config(key, default):
+    '''Read a colon-separated path list from ansible.cfg, or return default.
 
-    Reads roles_path from the first ansible.cfg found in the standard
-    locations. Relative paths in the config are resolved relative to the
-    config file itself, not the current working directory. Falls back to
-    ~/.ansible/roles when no config file or no roles_path setting is found.
+    Searches ansible.cfg in the current directory, ~/.ansible.cfg, and
+    /etc/ansible/ansible.cfg. Relative paths are resolved relative to the
+    config file's own directory.
     '''
     cfg = configparser.ConfigParser()
     for candidate in ('ansible.cfg', os.path.expanduser('~/.ansible.cfg'), '/etc/ansible/ansible.cfg'):
         if os.path.isfile(candidate):
             cfg.read(candidate)
-            raw = cfg.get('defaults', 'roles_path', fallback=None)
+            raw = cfg.get('defaults', key, fallback=None)
             if raw:
                 base = os.path.dirname(os.path.abspath(candidate))
                 paths = []
@@ -60,7 +60,17 @@ def get_roles_paths():
                         paths.append(p if os.path.isabs(p) else os.path.join(base, p))
                 return paths
             break
-    return [os.path.expanduser('~/.ansible/roles')]
+    return [default]
+
+
+def get_roles_paths():
+    '''Return the configured Galaxy roles directories, or ~/.ansible/roles.'''
+    return _paths_from_config('roles_path', os.path.expanduser('~/.ansible/roles'))
+
+
+def get_collections_paths():
+    '''Return the configured collections directories, or ~/.ansible/collections.'''
+    return _paths_from_config('collections_path', os.path.expanduser('~/.ansible/collections'))
 
 
 def installed_roles():
@@ -82,6 +92,32 @@ def installed_roles():
     return roles
 
 
+def installed_collections():
+    '''Return a dict mapping installed collection names to their version strings.
+
+    Scans {path}/ansible_collections/{namespace}/{name}/MANIFEST.json for each
+    path returned by get_collections_paths(). Collection names are in
+    namespace.name format (e.g. middleware_automation.keycloak).
+    '''
+    collections = {}
+    for base_path in get_collections_paths():
+        collections_dir = os.path.join(base_path, 'ansible_collections')
+        if not os.path.isdir(collections_dir):
+            continue
+        for namespace in os.listdir(collections_dir):
+            ns_path = os.path.join(collections_dir, namespace)
+            if not os.path.isdir(ns_path):
+                continue
+            for name in os.listdir(ns_path):
+                manifest = os.path.join(ns_path, name, 'MANIFEST.json')
+                if os.path.isfile(manifest):
+                    with open(manifest) as f:
+                        info = yaml.safe_load(f)
+                    version = info.get('collection_info', {}).get('version', '')
+                    collections[f'{namespace}.{name}'] = str(version)
+    return collections
+
+
 def main():
     module = AnsibleModule(argument_spec={}, supports_check_mode=True)
 
@@ -92,6 +128,7 @@ def main():
         module.fail_json(msg='requirements.yml not found in current directory')
 
     installed = installed_roles()
+    installed_col = installed_collections()
     errors = []
 
     for role in requirements.get('roles', []):
@@ -114,6 +151,22 @@ def main():
             errors.append(
                 f'role {name} has incorrect version '
                 f'(required: {required}, present: {installed[name]})'
+            )
+
+    for collection in requirements.get('collections', []):
+        name = collection.get('name')
+        if not name:
+            continue
+
+        if name not in installed_col:
+            errors.append(f'collection {name} is not installed')
+            continue
+
+        required = collection.get('version')
+        if required and installed_col[name] != str(required):
+            errors.append(
+                f'collection {name} has incorrect version '
+                f'(required: {required}, present: {installed_col[name]})'
             )
 
     if errors:
