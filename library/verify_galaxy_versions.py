@@ -34,7 +34,6 @@ RETURN = '''# No return values beyond the standard failed/changed fields.'''
 
 import configparser
 import os
-import re
 import yaml
 from ansible.module_utils.basic import AnsibleModule
 
@@ -132,13 +131,16 @@ def main():
     errors = []
 
     for role in requirements.get('roles', []):
-        name = role.get('name')
-        if not name:
-            # Derive name from git URL (e.g. https://example.com/foo/bar.git -> bar)
-            if role.get('scm') == 'git' and role.get('src'):
-                m = re.search(r'/([^/]*)\.git', role['src'])
-                if m:
-                    name = m.group(1)
+        if isinstance(role, str):
+            name = role
+            required_version = None
+        else:
+            name = role.get('name')
+            if not name and role.get('src'):
+                # Derive name from URL last path component, stripping optional .git
+                last = role['src'].rstrip('/').rsplit('/', 1)[-1]
+                name = last[:-4] if last.endswith('.git') else last
+            required_version = role.get('version')
         if not name:
             continue
 
@@ -146,7 +148,7 @@ def main():
             errors.append(f'role {name} is not installed')
             continue
 
-        required = role.get('version')
+        required = required_version
         if required and installed[name] != str(required):
             errors.append(
                 f'role {name} has incorrect version '
@@ -154,7 +156,12 @@ def main():
             )
 
     for collection in requirements.get('collections', []):
-        name = collection.get('name')
+        if isinstance(collection, str):
+            name = collection
+            required_version = None
+        else:
+            name = collection.get('name')
+            required_version = collection.get('version')
         if not name:
             continue
 
@@ -162,7 +169,7 @@ def main():
             errors.append(f'collection {name} is not installed')
             continue
 
-        required = collection.get('version')
+        required = required_version
         if required and installed_col[name] != str(required):
             errors.append(
                 f'collection {name} has incorrect version '
