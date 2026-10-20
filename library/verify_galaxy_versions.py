@@ -99,13 +99,17 @@ def installed_roles():
     '''Return a dict mapping installed role names to their version strings.
 
     Scans every directory returned by get_roles_paths() and reads the version
-    from meta/.galaxy_install_info inside each role directory.
+    from meta/.galaxy_install_info inside each role directory. If a role is
+    installed in several directories, the first one wins, matching Ansible's
+    own lookup order.
     '''
     roles = {}
     for path in get_roles_paths():
         if not os.path.isdir(path):
             continue
         for name in os.listdir(path):
+            if name in roles:
+                continue
             info_file = os.path.join(path, name, 'meta', '.galaxy_install_info')
             if os.path.isfile(info_file):
                 with open(info_file) as f:
@@ -119,7 +123,9 @@ def installed_collections():
 
     Scans {path}/ansible_collections/{namespace}/{name}/MANIFEST.json for each
     path returned by get_collections_paths(). Collection names are in
-    namespace.name format (e.g. middleware_automation.keycloak).
+    namespace.name format (e.g. middleware_automation.keycloak). If a
+    collection is installed in several directories, the first one wins,
+    matching Ansible's own lookup order.
     '''
     collections = {}
     for base_path in get_collections_paths():
@@ -131,12 +137,15 @@ def installed_collections():
             if not os.path.isdir(ns_path):
                 continue
             for name in os.listdir(ns_path):
+                key = f'{namespace}.{name}'
+                if key in collections:
+                    continue
                 manifest = os.path.join(ns_path, name, 'MANIFEST.json')
                 if os.path.isfile(manifest):
                     with open(manifest) as f:
                         info = yaml.safe_load(f)
                     version = info.get('collection_info', {}).get('version', '')
-                    collections[f'{namespace}.{name}'] = str(version)
+                    collections[key] = str(version)
     return collections
 
 
